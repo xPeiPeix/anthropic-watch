@@ -1,0 +1,215 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+
+theme:
+  background-color: 225 14 10
+  primary-color: 157 47 65
+  positive-color: 115 54 76
+  negative-color: 0 90 60
+  contrast-multiplier: 1.1
+  text-saturation-multiplier: 0.5
+
+branding:
+  logo-text: Anthropic Watch
+  favicon-url: https://www.anthropic.com/favicon.ico
+
+pages:
+  # ==================== Page 1: Dashboard ====================
+  - name: Dashboard
+    slug: ""
+    columns:
+      # ---------- Left Column (small) ----------
+      - size: small
+        widgets:
+          - type: clock
+            hour-format: 24h
+            timezones:
+              - timezone: Asia/Shanghai
+                label: Beijing
+              - timezone: America/Los_Angeles
+                label: SF (Anthropic HQ)
+
+          - type: monitor
+            title: Anthropic Services
+            cache: 1m
+            sites:
+              - title: Claude.ai
+                url: https://claude.ai
+                icon: si:anthropic
+              - title: Claude API
+                url: https://api.anthropic.com
+                icon: si:anthropic
+              - title: Platform
+                url: https://platform.claude.com
+                icon: si:anthropic
+
+          - type: rss
+            title: API Status
+            style: vertical-list
+            limit: 8
+            collapse-after: 5
+            cache: 5m
+            feeds:
+              - url: https://status.anthropic.com/history.atom
+                title: Claude Status
+
+          - type: releases
+            title: SDK Releases
+            cache: 1h
+            repositories:
+              - anthropics/anthropic-sdk-python
+              - anthropics/anthropic-sdk-typescript
+              - anthropics/anthropic-sdk-go
+
+      # ---------- Right Column (full) ----------
+      - size: full
+        widgets:
+          - type: group
+            widgets:
+              - type: rss
+                title: News & Announcements
+                style: detailed-list
+                limit: 10
+                collapse-after: 6
+                cache: 30m
+                feeds:
+                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml
+                    title: Anthropic News
+
+              - type: rss
+                title: Research
+                style: vertical-list
+                limit: 10
+                collapse-after: 5
+                cache: 1h
+                feeds:
+                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_research.xml
+                    title: Research
+
+              - type: rss
+                title: Engineering
+                style: detailed-list
+                limit: 8
+                collapse-after: 5
+                cache: 1h
+                feeds:
+                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml
+                    title: Engineering
+
+          - type: group
+            widgets:
+              - type: hacker-news
+                title: Hacker News · Anthropic
+                limit: 10
+                collapse-after: 5
+
+              - type: reddit
+                title: r/ClaudeAI
+                subreddit: ClaudeAI
+                style: vertical-list
+                limit: 8
+                collapse-after: 5
+                sort: hot
+
+          - type: releases
+            title: Anthropic GitHub Releases
+            cache: 1h
+            repositories:
+              - anthropics/claude-code
+              - anthropics/skills
+              - anthropics/claude-plugins-official
+              - anthropics/claude-code-action
+              - anthropics/claude-agent-sdk-python
+              - anthropics/claude-agent-sdk-typescript
+
+  # ==================== Page 2: Research & Engineering ====================
+  - name: Research
+    columns:
+      - size: small
+        widgets:
+          - type: rss
+            title: Anthropic Research
+            style: vertical-list
+            limit: 20
+            collapse-after: 10
+            cache: 1h
+            feeds:
+              - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_research.xml
+                title: Research Papers
+
+          - type: rss
+            title: Red Teaming
+            style: vertical-list
+            limit: 10
+            collapse-after: 5
+            cache: 1h
+            feeds:
+              - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_red.xml
+                title: Red Team
+
+      - size: full
+        widgets:
+          - type: rss
+            title: Engineering Blog
+            style: detailed-list
+            limit: 15
+            collapse-after: 8
+            cache: 1h
+            feeds:
+              - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml
+                title: Engineering
+
+          - type: rss
+            title: Claude Code Changelog
+            style: vertical-list
+            limit: 20
+            collapse-after: 10
+            cache: 1h
+            feeds:
+              - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_changelog_claude_code.xml
+                title: Claude Code Updates
+
+  # ==================== Page 3: Industry News ====================
+  - name: Industry
+    columns:
+      - size: small
+        widgets:
+          - type: hacker-news
+            title: Hacker News · AI
+            limit: 15
+            collapse-after: 8
+
+          - type: reddit
+            title: r/anthropic
+            subreddit: anthropic
+            style: vertical-list
+            limit: 10
+            collapse-after: 5
+            sort: hot
+
+      - size: full
+        widgets:
+          - type: rss
+            title: AI Tech News
+            style: horizontal-cards
+            limit: 20
+            cache: 30m
+            feeds:
+              - url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+                title: The Verge AI
+                limit: 5
+              - url: https://techcrunch.com/category/artificial-intelligence/feed/
+                title: TechCrunch AI
+                limit: 5
+              - url: https://feeds.arstechnica.com/arstechnica/index
+                title: Ars Technica
+                limit: 5
+
+          - type: videos
+            title: Anthropic YouTube
+            style: grid-cards
+            channels:
+              - UCrDwWp7EBBv4NwvScIpBDOA
+            limit: 6
+            cache: 3h
