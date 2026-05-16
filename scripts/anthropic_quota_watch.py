@@ -205,10 +205,17 @@ BEIJING_TZ = dt.timezone(dt.timedelta(hours=8))
 
 
 def to_beijing(value: str) -> str:
-    """Format a UTC ISO timestamp as 'YYYY-MM-DD HH:MM' Beijing time."""
+    """Format a UTC ISO timestamp as 'YYYY-MM-DD HH:MM' Beijing time.
+
+    Parse failure / empty input map to '未知' rather than echoing the raw
+    value, so a malformed backend timestamp never appears UTC-looking in an
+    email that otherwise presents everything in Beijing time.
+    """
+    if not value:
+        return "未知"
     parsed = parse_iso(value)
     if parsed is None:
-        return value or "未知"
+        return "未知"
     return parsed.astimezone(BEIJING_TZ).strftime("%Y-%m-%d %H:%M")
 
 
