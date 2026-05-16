@@ -132,6 +132,16 @@ def env(name: str, default: str) -> str:
     return _LOCAL_CFG.get(name, default)
 
 
+def int_env(name: str, default: int) -> int:
+    """Tolerant int form of env(). A bad value falls back to the default
+    instead of raising at import time — an unhandled error there would make
+    the scheduled task fail silently with no log to diagnose from."""
+    try:
+        return int(env(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 CONFIG = {
     # Generic - same path for every Claude Code install, not personal.
     "credentials": env("AW_CLAUDE_CREDENTIALS",
@@ -144,8 +154,8 @@ CONFIG = {
     "output": env("AW_OUTPUT", str(REPO_ROOT / "assets" / "anthropic_quota.json")),
     "state": env("AW_STATE", str(REPO_ROOT / "data" / "quota_state.json")),
     "gateway_model": env("AW_GATEWAY_MODEL", "gemini-2.5-flash"),
-    "lookback_days": int(env("AW_DAYS", "14")),
-    "tavily_max": int(env("AW_TAVILY_MAX", "10")),
+    "lookback_days": int_env("AW_DAYS", 14),
+    "tavily_max": int_env("AW_TAVILY_MAX", 10),
     "no_email": env("AW_NO_EMAIL", "") not in ("", "0", "false", "False"),
 }
 
@@ -205,7 +215,9 @@ def read_oauth_token() -> tuple[str | None, dt.datetime | None]:
             if expires_at else None
         )
         return token, expiry
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        # TypeError guards a non-numeric expiresAt (e.g. a string written by
+        # another tool) reaching `expires_at / 1000`.
         log(f"oauth token unavailable: {type(exc).__name__}")
         return None, None
 
@@ -276,14 +288,20 @@ SMTP_BY_DOMAIN = {
 }
 
 
-def send_email(subject: str, text_body: str, html_body: str) -> bool:
+def send_email(subject: str, text_body: str, html_body: str) -> str:
+    """Returns "sent" | "skipped" | "failed".
+
+    "skipped" (disabled / not configured) is a permanent, intentional state -
+    callers may safely advance dedup state. "failed" is a transient SMTP
+    error - callers must NOT advance dedup state so the alert retries.
+    """
     if CONFIG["no_email"]:
         log("email disabled (AW_NO_EMAIL); skipping send")
-        return False
+        return "skipped"
     sender, password = read_email_creds()
     if not sender or not password:
         log("email not configured; skipping send")
-        return False
+        return "skipped"
 
     domain = sender.rsplit("@", 1)[-1].lower()
     server, port, use_ssl = SMTP_BY_DOMAIN.get(domain, ("smtp." + domain, 465, True))
@@ -305,10 +323,10 @@ def send_email(subject: str, text_body: str, html_body: str) -> bool:
             client.login(sender, password)
             client.sendmail(sender, [sender], msg.as_string())
         log(f"email sent: {subject}")
-        return True
+        return "sent"
     except (smtplib.SMTPException, OSError) as exc:
         log(f"email send failed: {type(exc).__name__}: {exc}")
-        return False
+        return "failed"
 
 
 # --------------------------------------------------------------------------- #
@@ -611,7 +629,7 @@ def ai_classify(candidates: list[dict], gateway_key: str,
         log(f"ai gateway failed: {type(exc).__name__}: {exc}")
         return []
 
-    match = re.search(r"\[.*\]", content, re.DOTALL)
+    match = re.search(r"\[[\s\S]*?\]", content)
     if not match:
         log("ai gateway returned no JSON array")
         return []
@@ -788,12 +806,12 @@ def main() -> int:
         CONFIG["no_email"] = True
 
     if args.test_email:
-        ok = send_email(
+        status = send_email(
             "Anthropic Watch 邮件通道测试",
             "这是一封来自 Anthropic Watch 的测试邮件，收到说明额度刷新推送通道已打通。",
             "<h3>Anthropic Watch</h3><p>邮件通道测试成功 - 额度刷新推送已就绪。</p>",
         )
-        return 0 if ok else 1
+        return 0 if status == "sent" else 1
 
     state = load_state()
     token, expiry = read_oauth_token()
@@ -811,14 +829,23 @@ def main() -> int:
     }
     atomic_write(CONFIG["output"], json.dumps(snapshot, ensure_ascii=False, indent=2))
     state["last_run"] = now_utc().isoformat()
-    atomic_write(CONFIG["state"], json.dumps(state, ensure_ascii=False, indent=2))
-    log(f"snapshot written: limits.ok={limits.get('ok')} "
-        f"announcements={len(announcements.get('items', []))} "
-        f"resets={len(reset_msgs)} fresh={len(fresh)}")
 
+    # Send before persisting dedup state. detect_resets() / build_announcements
+    # already marked these events notified/seen in `state`; persisting that
+    # before a failed send would permanently suppress the retry (codex C1).
+    email_status = "skipped"
     if reset_msgs or fresh:
         subject, text_body, html_body = compose_email(reset_msgs, fresh)
-        send_email(subject, text_body, html_body)
+        email_status = send_email(subject, text_body, html_body)
+
+    if email_status != "failed":
+        atomic_write(CONFIG["state"], json.dumps(state, ensure_ascii=False, indent=2))
+    else:
+        log("email send failed; dedup state NOT persisted so the alert retries next run")
+
+    log(f"snapshot written: limits.ok={limits.get('ok')} "
+        f"announcements={len(announcements.get('items', []))} "
+        f"resets={len(reset_msgs)} fresh={len(fresh)} email={email_status}")
 
     return 0
 

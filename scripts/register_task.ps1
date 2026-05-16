@@ -42,6 +42,9 @@ if (-not $pythonw -or -not (Test-Path $pythonw)) {
 }
 if (-not $pythonw) { $pythonw = (Get-Command python.exe -EA SilentlyContinue).Source }
 if (-not $pythonw) { $pythonw = "pythonw.exe" }
+# Normalize every source (incl. $env:AW_PYTHON) so a quoted path does not get
+# double-quoted when composing $run below.
+if ($pythonw) { $pythonw = $pythonw.Trim().Trim('"').Trim("'") }
 
 $run = '"{0}" "{1}"' -f $pythonw, $watcher
 
