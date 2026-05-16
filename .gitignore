@@ -5,3 +5,6 @@
 /.idea
 glance.exe
 scripts/aw_config.local.env
+__pycache__/
+.todos/
+/.claude
