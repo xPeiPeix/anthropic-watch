@@ -2,6 +2,7 @@ server:
   host: 0.0.0.0
   # 8080 falls inside a Windows excluded port range (Hyper-V/WSL reservation),
   # so it cannot be bound on this machine; 9080 is outside all excluded ranges.
+  # The two custom-api widgets hard-code this port in their URL; keep in sync.
   port: 9080
   # Snapshot written by scripts/anthropic_quota_watch.py is served from here.
   assets-path: ./assets
@@ -13,14 +14,30 @@ theme:
   negative-color: 0 90 60
   contrast-multiplier: 1.1
   text-saturation-multiplier: 0.5
+  # Custom widget styling (quota meters, announcement cards). The file is
+  # whitelisted in .gitignore; assets-path serves it at /assets/.
+  custom-css-file: /assets/anthropic-watch.css
+  presets:
+    anthropic-clay:
+      background-color: 20 14 10
+      primary-color: 14 60 62
+      positive-color: 140 45 52
+      negative-color: 2 75 60
+      contrast-multiplier: 1.15
+    high-contrast:
+      background-color: 222 16 7
+      primary-color: 210 78 72
+      positive-color: 150 52 55
+      negative-color: 0 80 66
+      contrast-multiplier: 1.35
 
 branding:
   logo-text: Anthropic Watch
   favicon-url: https://www.anthropic.com/favicon.ico
 
 pages:
-  # ==================== Page 1: Dashboard ====================
-  - name: Dashboard
+  # ==================== Page 1: 总览 ====================
+  - name: 总览
     slug: ""
     columns:
       # ---------- Left Column (small) ----------
@@ -33,40 +50,6 @@ pages:
                 label: Beijing
               - timezone: America/Los_Angeles
                 label: SF (Anthropic HQ)
-
-          - type: custom-api
-            title: Claude 额度重置
-            cache: 5m
-            url: http://localhost:9080/assets/anthropic_quota.json
-            template: |
-              {{ if .JSON.Bool "limits.ok" }}
-                <div class="flex flex-column gap-10">
-                  <div class="flex justify-between">
-                    <span class="color-highlight">5 小时窗口</span>
-                    <span>已用 {{ .JSON.Int "limits.five_hour.utilization" }}%</span>
-                  </div>
-                  <div class="flex justify-between size-h6 color-subdue">
-                    <span>额度重置</span>
-                    <span {{ .JSON.String "limits.five_hour.resets_at" | parseTime "rfc3339" | toRelativeTime }}></span>
-                  </div>
-                  <div class="flex justify-between margin-top-10">
-                    <span class="color-highlight">7 天（周）窗口</span>
-                    <span>已用 {{ .JSON.Int "limits.seven_day.utilization" }}%</span>
-                  </div>
-                  <div class="flex justify-between size-h6 color-subdue">
-                    <span>额度重置</span>
-                    <span {{ .JSON.String "limits.seven_day.resets_at" | parseTime "rfc3339" | toRelativeTime }}></span>
-                  </div>
-                  <div class="size-h6 color-subdue margin-top-10">
-                    数据更新 <span {{ .JSON.String "updated_at" | parseTime "rfc3339" | toRelativeTime }}></span>
-                  </div>
-                </div>
-              {{ else }}
-                <p class="color-negative">额度数据暂不可用（{{ .JSON.String "limits.error" }}）</p>
-                {{ if .JSON.Exists "limits.hint" }}
-                <p class="size-h6 color-subdue">{{ .JSON.String "limits.hint" }}</p>
-                {{ end }}
-              {{ end }}
 
           - type: monitor
             title: Anthropic Services
@@ -95,44 +78,106 @@ pages:
               - url: https://status.anthropic.com/history.atom
                 title: Claude Status
 
-          - type: releases
-            title: SDK Releases
-            cache: 1h
-            repositories:
-              - anthropics/anthropic-sdk-python
-              - anthropics/anthropic-sdk-typescript
-              - anthropics/anthropic-sdk-go
-
       # ---------- Right Column (full) ----------
       - size: full
         widgets:
-          - type: custom-api
-            title: 额度 / 提额公告
-            cache: 10m
-            url: http://localhost:9080/assets/anthropic_quota.json
-            template: |
-              {{ if .JSON.Bool "announcements.ok" }}
-                {{ $items := .JSON.Array "announcements.items" }}
-                {{ if eq (len $items) 0 }}
-                  <p class="color-subdue">近 14 天暂无额度相关公告（已扫描 {{ .JSON.Int "announcements.scanned" }} 条官方条目，AI 网关语义判定）</p>
-                {{ else }}
-                  <ul class="list list-gap-10 collapsible-container" data-collapse-after="5">
-                    {{ range $items }}
-                      <li>
-                        <a class="size-h4 color-highlight block text-truncate" href="{{ .String "link" }}" target="_blank" rel="noreferrer">{{ .String "title" }}</a>
-                        <ul class="list-horizontal-text">
-                          <li class="color-positive">{{ .String "change_type" }}</li>
-                          <li>{{ .String "source" }}</li>
-                          {{ if .Bool "is_new" }}<li class="color-negative">NEW</li>{{ end }}
-                        </ul>
-                        <div class="size-h6 color-paragraph">{{ .String "summary_zh" }}</div>
-                      </li>
+          - type: split-column
+            max-columns: 2
+            widgets:
+              - type: custom-api
+                title: Claude 额度重置
+                cache: 5m
+                url: http://localhost:9080/assets/anthropic_quota.json
+                template: |
+                  {{ if .JSON.Bool "limits.ok" }}
+                    <div class="aw-quota">
+                      {{ $f := .JSON.Int "limits.five_hour.utilization" }}
+                      <div class="aw-row">
+                        <div class="aw-row-head">
+                          <span class="color-highlight">5 小时窗口</span>
+                          <span class="aw-pct">已用 {{ $f }}%</span>
+                        </div>
+                        <div class="aw-meter">
+                          <div class="aw-meter-fill {{ if ge $f 90 }}aw-crit{{ else if ge $f 70 }}aw-warn{{ else }}aw-ok{{ end }}" style="width: {{ $f }}%"></div>
+                        </div>
+                        {{ $r := .JSON.String "limits.five_hour.resets_at" }}
+                        {{ if $r }}
+                        <div class="aw-sub color-subdue">额度重置 <span {{ $r | parseTime "rfc3339" | toRelativeTime }}></span></div>
+                        {{ else }}
+                        <div class="aw-sub color-subdue">额度重置 <span class="color-base">未知（本周期无用量）</span></div>
+                        {{ end }}
+                      </div>
+
+                      {{ $w := .JSON.Int "limits.seven_day.utilization" }}
+                      <div class="aw-row">
+                        <div class="aw-row-head">
+                          <span class="color-highlight">7 天（周）窗口</span>
+                          <span class="aw-pct">已用 {{ $w }}%</span>
+                        </div>
+                        <div class="aw-meter">
+                          <div class="aw-meter-fill {{ if ge $w 90 }}aw-crit{{ else if ge $w 70 }}aw-warn{{ else }}aw-ok{{ end }}" style="width: {{ $w }}%"></div>
+                        </div>
+                        {{ $rw := .JSON.String "limits.seven_day.resets_at" }}
+                        {{ if $rw }}
+                        <div class="aw-sub color-subdue">额度重置 <span {{ $rw | parseTime "rfc3339" | toRelativeTime }}></span></div>
+                        {{ else }}
+                        <div class="aw-sub color-subdue">额度重置 <span class="color-base">未知（本周期无用量）</span></div>
+                        {{ end }}
+                      </div>
+
+                      {{ if .JSON.Exists "limits.seven_day_opus.utilization" }}
+                      {{ $o := .JSON.Int "limits.seven_day_opus.utilization" }}
+                      <div class="aw-row">
+                        <div class="aw-row-head">
+                          <span class="color-highlight">Opus 周窗口</span>
+                          <span class="aw-pct">已用 {{ $o }}%</span>
+                        </div>
+                        <div class="aw-meter">
+                          <div class="aw-meter-fill {{ if ge $o 90 }}aw-crit{{ else if ge $o 70 }}aw-warn{{ else }}aw-ok{{ end }}" style="width: {{ $o }}%"></div>
+                        </div>
+                        {{ $ro := .JSON.String "limits.seven_day_opus.resets_at" }}
+                        {{ if $ro }}
+                        <div class="aw-sub color-subdue">额度重置 <span {{ $ro | parseTime "rfc3339" | toRelativeTime }}></span></div>
+                        {{ end }}
+                      </div>
+                      {{ end }}
+
+                      <div class="aw-updated color-subdue">数据更新 <span {{ .JSON.String "updated_at" | parseTime "rfc3339" | toRelativeTime }}></span></div>
+                    </div>
+                  {{ else }}
+                    <p class="color-negative">额度数据暂不可用（{{ .JSON.String "limits.error" }}）</p>
+                    {{ if .JSON.Exists "limits.hint" }}
+                    <p class="size-h6 color-subdue">{{ .JSON.String "limits.hint" }}</p>
                     {{ end }}
-                  </ul>
-                {{ end }}
-              {{ else }}
-                <p class="color-negative">公告扫描暂不可用（{{ .JSON.String "announcements.error" }}）</p>
-              {{ end }}
+                  {{ end }}
+
+              - type: custom-api
+                title: 额度 / 提额公告
+                cache: 10m
+                url: http://localhost:9080/assets/anthropic_quota.json
+                template: |
+                  {{ if .JSON.Bool "announcements.ok" }}
+                    {{ $items := .JSON.Array "announcements.items" }}
+                    {{ if eq (len $items) 0 }}
+                      <p class="color-subdue">近 14 天暂无额度相关公告（已扫描 {{ .JSON.Int "announcements.scanned" }} 条官方条目，AI 网关语义判定）</p>
+                    {{ else }}
+                      <ul class="list list-gap-10 collapsible-container" data-collapse-after="5">
+                        {{ range $items }}
+                          <li class="aw-card">
+                            <div class="aw-card-top">
+                              <span class="aw-badge">{{ .String "change_type" }}</span>
+                              {{ if .Bool "is_new" }}<span class="aw-badge aw-badge-new">NEW</span>{{ end }}
+                              <span class="aw-card-src color-subdue">{{ .String "source" }}</span>
+                            </div>
+                            <a class="size-h4 color-highlight block text-truncate" href="{{ .String "link" }}" target="_blank" rel="noreferrer">{{ .String "title" }}</a>
+                            <div class="size-h6 color-paragraph aw-card-sum">{{ .String "summary_zh" }}</div>
+                          </li>
+                        {{ end }}
+                      </ul>
+                    {{ end }}
+                  {{ else }}
+                    <p class="color-negative">公告扫描暂不可用（{{ .JSON.String "announcements.error" }}）</p>
+                  {{ end }}
 
           - type: group
             widgets:
@@ -146,139 +191,170 @@ pages:
                   - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml
                     title: Anthropic News
 
-              - type: rss
-                title: Research
-                style: vertical-list
-                limit: 10
-                collapse-after: 5
-                cache: 1h
-                feeds:
-                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_research.xml
-                    title: Research
-
-              - type: rss
-                title: Engineering
-                style: detailed-list
-                limit: 8
-                collapse-after: 5
-                cache: 1h
-                feeds:
-                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml
-                    title: Engineering
-
-          - type: group
-            widgets:
               - type: hacker-news
                 title: Hacker News · Anthropic
                 limit: 10
                 collapse-after: 5
 
+  # ==================== Page 2: 版本 & 发布 ====================
+  - name: 版本 & 发布
+    width: wide
+    columns:
+      - size: full
+        widgets:
+          - type: split-column
+            max-columns: 3
+            widgets:
+              - type: releases
+                title: 官方仓库 Releases
+                cache: 1h
+                repositories:
+                  - anthropics/claude-code
+                  - anthropics/skills
+                  - anthropics/claude-plugins-official
+                  - anthropics/claude-code-action
+                  - anthropics/claude-agent-sdk-python
+                  - anthropics/claude-agent-sdk-typescript
+
+              - type: releases
+                title: SDK Releases
+                cache: 1h
+                repositories:
+                  - anthropics/anthropic-sdk-python
+                  - anthropics/anthropic-sdk-typescript
+                  - anthropics/anthropic-sdk-go
+
+              - type: releases
+                title: 上游 Glance（fork 同步）
+                cache: 1h
+                repositories:
+                  - glanceapp/glance
+
+          - type: split-column
+            max-columns: 2
+            widgets:
+              - type: repository
+                title: anthropics/claude-code
+                cache: 3h
+                repository: anthropics/claude-code
+                pull-requests-limit: 5
+                issues-limit: 3
+                commits-limit: 5
+
+              - type: rss
+                title: Claude Code Changelog
+                style: vertical-list
+                limit: 20
+                collapse-after: 10
+                cache: 1h
+                feeds:
+                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_changelog_claude_code.xml
+                    title: Claude Code Updates
+
+  # ==================== Page 3: 研究 & 工程 ====================
+  - name: 研究 & 工程
+    columns:
+      - size: full
+        widgets:
+          - type: split-column
+            max-columns: 2
+            widgets:
+              - type: rss
+                title: Anthropic Research
+                style: vertical-list
+                limit: 20
+                collapse-after: 10
+                cache: 1h
+                feeds:
+                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_research.xml
+                    title: Research Papers
+
+              - type: rss
+                title: Engineering Blog
+                style: detailed-list
+                limit: 15
+                collapse-after: 8
+                cache: 1h
+                feeds:
+                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml
+                    title: Engineering
+
+          - type: split-column
+            max-columns: 2
+            widgets:
+              - type: rss
+                title: Red Teaming
+                style: vertical-list
+                limit: 10
+                collapse-after: 5
+                cache: 1h
+                feeds:
+                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_red.xml
+                    title: Red Team
+
+              - type: rss
+                title: Anthropic News（全量）
+                style: detailed-list
+                limit: 15
+                collapse-after: 8
+                cache: 30m
+                feeds:
+                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml
+                    title: Anthropic News
+
+  # ==================== Page 4: 生态 & 舆情 ====================
+  - name: 生态 & 舆情
+    width: wide
+    columns:
+      - size: full
+        widgets:
+          - type: split-column
+            max-columns: 3
+            widgets:
+              - type: hacker-news
+                title: Hacker News · AI
+                limit: 15
+                collapse-after: 8
+
+              - type: reddit
+                title: r/anthropic
+                subreddit: anthropic
+                style: vertical-list
+                limit: 12
+                collapse-after: 6
+                sort: hot
+
               - type: reddit
                 title: r/ClaudeAI
                 subreddit: ClaudeAI
                 style: vertical-list
-                limit: 8
-                collapse-after: 5
+                limit: 12
+                collapse-after: 6
                 sort: hot
 
-          - type: releases
-            title: Anthropic GitHub Releases
-            cache: 1h
-            repositories:
-              - anthropics/claude-code
-              - anthropics/skills
-              - anthropics/claude-plugins-official
-              - anthropics/claude-code-action
-              - anthropics/claude-agent-sdk-python
-              - anthropics/claude-agent-sdk-typescript
+          - type: split-column
+            max-columns: 2
+            widgets:
+              - type: rss
+                title: AI Tech News
+                style: horizontal-cards
+                limit: 20
+                cache: 30m
+                feeds:
+                  - url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+                    title: The Verge AI
+                    limit: 5
+                  - url: https://techcrunch.com/category/artificial-intelligence/feed/
+                    title: TechCrunch AI
+                    limit: 5
+                  - url: https://feeds.arstechnica.com/arstechnica/index
+                    title: Ars Technica
+                    limit: 5
 
-  # ==================== Page 2: Research & Engineering ====================
-  - name: Research
-    columns:
-      - size: small
-        widgets:
-          - type: rss
-            title: Anthropic Research
-            style: vertical-list
-            limit: 20
-            collapse-after: 10
-            cache: 1h
-            feeds:
-              - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_research.xml
-                title: Research Papers
-
-          - type: rss
-            title: Red Teaming
-            style: vertical-list
-            limit: 10
-            collapse-after: 5
-            cache: 1h
-            feeds:
-              - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_red.xml
-                title: Red Team
-
-      - size: full
-        widgets:
-          - type: rss
-            title: Engineering Blog
-            style: detailed-list
-            limit: 15
-            collapse-after: 8
-            cache: 1h
-            feeds:
-              - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml
-                title: Engineering
-
-          - type: rss
-            title: Claude Code Changelog
-            style: vertical-list
-            limit: 20
-            collapse-after: 10
-            cache: 1h
-            feeds:
-              - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_changelog_claude_code.xml
-                title: Claude Code Updates
-
-  # ==================== Page 3: Industry News ====================
-  - name: Industry
-    columns:
-      - size: small
-        widgets:
-          - type: hacker-news
-            title: Hacker News · AI
-            limit: 15
-            collapse-after: 8
-
-          - type: reddit
-            title: r/anthropic
-            subreddit: anthropic
-            style: vertical-list
-            limit: 10
-            collapse-after: 5
-            sort: hot
-
-      - size: full
-        widgets:
-          - type: rss
-            title: AI Tech News
-            style: horizontal-cards
-            limit: 20
-            cache: 30m
-            feeds:
-              - url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
-                title: The Verge AI
-                limit: 5
-              - url: https://techcrunch.com/category/artificial-intelligence/feed/
-                title: TechCrunch AI
-                limit: 5
-              - url: https://feeds.arstechnica.com/arstechnica/index
-                title: Ars Technica
-                limit: 5
-
-          - type: videos
-            title: Anthropic YouTube
-            style: grid-cards
-            channels:
-              - UCrDwWp7EBBv4NwvScIpBDOA
-            limit: 6
-            cache: 3h
+              - type: videos
+                title: Anthropic YouTube
+                style: grid-cards
+                channels:
+                  - UCrDwWp7EBBv4NwvScIpBDOA
+                limit: 6
+                cache: 3h

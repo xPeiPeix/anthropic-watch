@@ -1,5 +1,6 @@
 /assets/*
 !/assets/.gitkeep
+!/assets/anthropic-watch.css
 /data
 /build
 /playground
