@@ -1,6 +1,10 @@
 server:
   host: 0.0.0.0
-  port: 8080
+  # 8080 falls inside a Windows excluded port range (Hyper-V/WSL reservation),
+  # so it cannot be bound on this machine; 9080 is outside all excluded ranges.
+  port: 9080
+  # Snapshot written by scripts/anthropic_quota_watch.py is served from here.
+  assets-path: ./assets
 
 theme:
   background-color: 225 14 10
@@ -30,6 +34,40 @@ pages:
               - timezone: America/Los_Angeles
                 label: SF (Anthropic HQ)
 
+          - type: custom-api
+            title: Claude 额度重置
+            cache: 5m
+            url: http://localhost:9080/assets/anthropic_quota.json
+            template: |
+              {{ if .JSON.Bool "limits.ok" }}
+                <div class="flex flex-column gap-10">
+                  <div class="flex justify-between">
+                    <span class="color-highlight">5 小时窗口</span>
+                    <span>已用 {{ .JSON.Int "limits.five_hour.utilization" }}%</span>
+                  </div>
+                  <div class="flex justify-between size-h6 color-subdue">
+                    <span>额度重置</span>
+                    <span {{ .JSON.String "limits.five_hour.resets_at" | parseTime "rfc3339" | toRelativeTime }}></span>
+                  </div>
+                  <div class="flex justify-between margin-top-10">
+                    <span class="color-highlight">7 天（周）窗口</span>
+                    <span>已用 {{ .JSON.Int "limits.seven_day.utilization" }}%</span>
+                  </div>
+                  <div class="flex justify-between size-h6 color-subdue">
+                    <span>额度重置</span>
+                    <span {{ .JSON.String "limits.seven_day.resets_at" | parseTime "rfc3339" | toRelativeTime }}></span>
+                  </div>
+                  <div class="size-h6 color-subdue margin-top-10">
+                    数据更新 <span {{ .JSON.String "updated_at" | parseTime "rfc3339" | toRelativeTime }}></span>
+                  </div>
+                </div>
+              {{ else }}
+                <p class="color-negative">额度数据暂不可用（{{ .JSON.String "limits.error" }}）</p>
+                {{ if .JSON.Exists "limits.hint" }}
+                <p class="size-h6 color-subdue">{{ .JSON.String "limits.hint" }}</p>
+                {{ end }}
+              {{ end }}
+
           - type: monitor
             title: Anthropic Services
             cache: 1m
@@ -37,9 +75,12 @@ pages:
               - title: Claude.ai
                 url: https://claude.ai
                 icon: si:anthropic
+                alt-status-codes:
+                  - 403
               - title: Claude API
                 url: https://api.anthropic.com
                 icon: si:anthropic
+                check-url: https://status.anthropic.com/api/v2/status.json
               - title: Platform
                 url: https://platform.claude.com
                 icon: si:anthropic
@@ -65,6 +106,34 @@ pages:
       # ---------- Right Column (full) ----------
       - size: full
         widgets:
+          - type: custom-api
+            title: 额度 / 提额公告
+            cache: 10m
+            url: http://localhost:9080/assets/anthropic_quota.json
+            template: |
+              {{ if .JSON.Bool "announcements.ok" }}
+                {{ $items := .JSON.Array "announcements.items" }}
+                {{ if eq (len $items) 0 }}
+                  <p class="color-subdue">近 14 天暂无额度相关公告（已扫描 {{ .JSON.Int "announcements.scanned" }} 条官方条目，AI 网关语义判定）</p>
+                {{ else }}
+                  <ul class="list list-gap-10 collapsible-container" data-collapse-after="5">
+                    {{ range $items }}
+                      <li>
+                        <a class="size-h4 color-highlight block text-truncate" href="{{ .String "link" }}" target="_blank" rel="noreferrer">{{ .String "title" }}</a>
+                        <ul class="list-horizontal-text">
+                          <li class="color-positive">{{ .String "change_type" }}</li>
+                          <li>{{ .String "source" }}</li>
+                          {{ if .Bool "is_new" }}<li class="color-negative">NEW</li>{{ end }}
+                        </ul>
+                        <div class="size-h6 color-paragraph">{{ .String "summary_zh" }}</div>
+                      </li>
+                    {{ end }}
+                  </ul>
+                {{ end }}
+              {{ else }}
+                <p class="color-negative">公告扫描暂不可用（{{ .JSON.String "announcements.error" }}）</p>
+              {{ end }}
+
           - type: group
             widgets:
               - type: rss

@@ -1,5 +1,7 @@
 /assets
+/data
 /build
 /playground
 /.idea
 glance.exe
+scripts/aw_config.local.env
