@@ -1,0 +1,125 @@
+/*
+ * Anthropic Watch - custom dashboard styling.
+ *
+ * Scoped to the two watcher-driven custom-api widgets (quota meters and
+ * announcement cards). Colors reference Glance's theme variables so the
+ * styling automatically follows the active theme/preset instead of being
+ * hard-coded. Served from server.assets-path at /assets/anthropic-watch.css.
+ */
+
+/*
+ * Glance exposes no semantic "warning/amber" theme variable (only positive/
+ * negative/primary), so the mid-utilization meter color is defined here as a
+ * single named token rather than an inline magic value. It is overridden for
+ * presets that need a distinct value (e.g. high-contrast) so aw-warn stays
+ * consistent with the var-driven aw-ok/aw-crit siblings across theme presets.
+ * The active preset is reflected as <html data-theme="<key>">.
+ */
+:root {
+    --aw-warn: hsl(35, 80%, 55%);
+}
+
+:root[data-theme="high-contrast"] {
+    --aw-warn: hsl(38, 92%, 62%);
+}
+
+/* ---------- Quota meters (Claude 额度重置) ---------- */
+
+.widget-type-custom-api .aw-quota {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.widget-type-custom-api .aw-row {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.widget-type-custom-api .aw-row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.widget-type-custom-api .aw-pct {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.widget-type-custom-api .aw-meter {
+    height: 7px;
+    border-radius: 4px;
+    background: var(--color-widget-background-highlight);
+    border: 1px solid var(--color-progress-border);
+    overflow: hidden;
+}
+
+.widget-type-custom-api .aw-meter-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.widget-type-custom-api .aw-ok {
+    background: var(--color-positive);
+}
+
+.widget-type-custom-api .aw-warn {
+    background: var(--aw-warn);
+}
+
+.widget-type-custom-api .aw-crit {
+    background: var(--color-negative);
+}
+
+.widget-type-custom-api .aw-sub,
+.widget-type-custom-api .aw-updated {
+    font-size: 1.2rem;
+}
+
+.widget-type-custom-api .aw-updated {
+    margin-top: 4px;
+    border-top: 1px dashed var(--color-widget-content-border);
+    padding-top: 8px;
+}
+
+/* ---------- Announcement cards (额度 / 提额公告) ---------- */
+
+.widget-type-custom-api .aw-card {
+    padding: 11px 13px;
+    background: var(--color-widget-background-highlight);
+    border: 1px solid var(--color-widget-content-border);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--border-radius);
+}
+
+.widget-type-custom-api .aw-card-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.widget-type-custom-api .aw-badge {
+    font-size: 1.1rem;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--color-primary);
+    color: var(--color-background);
+}
+
+.widget-type-custom-api .aw-badge-new {
+    background: var(--color-negative);
+}
+
+.widget-type-custom-api .aw-card-src {
+    margin-left: auto;
+    font-size: 1.1rem;
+}
+
+.widget-type-custom-api .aw-card-sum {
+    margin-top: 4px;
+}
