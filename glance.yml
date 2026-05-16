@@ -248,7 +248,10 @@ pages:
                 collapse-after: 10
                 cache: 1h
                 feeds:
-                  - url: https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_changelog_claude_code.xml
+                  # Olshansk changelog mirror is dead (frozen at v2.1.114 with a
+                  # "no longer maintained" notice); GitHub's own releases atom is
+                  # live and carries real <updated> dates so relative time works.
+                  - url: https://github.com/anthropics/claude-code/releases.atom
                     title: Claude Code Updates
 
   # ==================== Page 3: 研究 & 工程 ====================
