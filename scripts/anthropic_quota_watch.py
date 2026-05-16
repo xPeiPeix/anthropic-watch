@@ -377,10 +377,18 @@ def build_limits_section(token: str | None, expiry: dt.datetime | None) -> dict:
     except (urllib.error.URLError, ValueError, OSError) as exc:
         return {"ok": False, "error": type(exc).__name__}
 
+    five_hour = shape_window(usage.get("five_hour"))
+    seven_day = shape_window(usage.get("seven_day"))
+    # The dashboard renders five_hour/seven_day unconditionally under
+    # limits.ok; if the endpoint omits either, mark not-ok so the widget's
+    # existing unavailable-state path handles it instead of parsing nulls.
+    if five_hour is None or seven_day is None:
+        return {"ok": False, "error": "incomplete_usage_windows",
+                "hint": "用量端点暂未返回完整的 5h/7d 窗口，稍后自动恢复"}
     return {
         "ok": True,
-        "five_hour": shape_window(usage.get("five_hour")),
-        "seven_day": shape_window(usage.get("seven_day")),
+        "five_hour": five_hour,
+        "seven_day": seven_day,
         "seven_day_opus": shape_window(usage.get("seven_day_opus")),
         "extra_usage": usage.get("extra_usage"),
     }
