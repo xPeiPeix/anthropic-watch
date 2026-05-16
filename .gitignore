@@ -1,4 +1,5 @@
-/assets
+/assets/*
+!/assets/.gitkeep
 /data
 /build
 /playground
