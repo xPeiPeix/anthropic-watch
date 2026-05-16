@@ -199,6 +199,19 @@ def parse_iso(value: str) -> dt.datetime | None:
         return None
 
 
+# The user is in UTC+8 (Asia/Shanghai, no DST). Quota times from Anthropic are
+# UTC; notifications must show Beijing time so they match the user's wall clock.
+BEIJING_TZ = dt.timezone(dt.timedelta(hours=8))
+
+
+def to_beijing(value: str) -> str:
+    """Format a UTC ISO timestamp as 'YYYY-MM-DD HH:MM' Beijing time."""
+    parsed = parse_iso(value)
+    if parsed is None:
+        return value or "未知"
+    return parsed.astimezone(BEIJING_TZ).strftime("%Y-%m-%d %H:%M")
+
+
 # --------------------------------------------------------------------------- #
 # Credentials (runtime only, never logged, never written to a tracked file)
 # --------------------------------------------------------------------------- #
@@ -394,16 +407,18 @@ def build_limits_section(token: str | None, expiry: dt.datetime | None) -> dict:
     }
 
 
-def detect_resets(prev: dict, limits: dict) -> list[str]:
+def detect_resets(prev: dict, limits: dict) -> list[dict]:
     """A window refreshed iff its previously recorded reset time has elapsed.
 
     Fires at most once per window roll-over, guarded by a notified marker so
-    repeated scheduler runs do not resend the same email.
+    repeated scheduler runs do not resend the same email. Each entry carries
+    the refresh moment (the elapsed boundary) and the new window's next reset,
+    both in Beijing time, so the notification is unambiguous and actionable.
     """
     if not limits.get("ok"):
         return []
     notified = set(prev.get("notified_resets", []))
-    messages: list[str] = []
+    events: list[dict] = []
     labels = {"five_hour": "5 小时额度窗口", "seven_day": "7 天（周）额度窗口"}
 
     for key, label in labels.items():
@@ -413,9 +428,12 @@ def detect_resets(prev: dict, limits: dict) -> list[str]:
         prev_reset = prev.get(f"{key}_resets_at")
         prev_dt = parse_iso(prev_reset) if prev_reset else None
         if prev_dt is not None and now_utc() >= prev_dt and prev_reset not in notified:
-            messages.append(
-                f"{label} 已刷新：上一周期已于 {prev_reset} 结束，额度恢复，可以继续使用了。"
-            )
+            next_reset = window.get("resets_at")
+            events.append({
+                "label": label,
+                "refreshed_at": to_beijing(prev_reset),
+                "next_reset": to_beijing(next_reset) if next_reset else None,
+            })
             notified.add(prev_reset)
 
     # Persist the latest reset markers and the (capped) notified set.
@@ -423,7 +441,7 @@ def detect_resets(prev: dict, limits: dict) -> list[str]:
         window = limits.get(key)
         prev[f"{key}_resets_at"] = window.get("resets_at") if window else None
     prev["notified_resets"] = list(notified)[-50:]
-    return messages
+    return events
 
 
 # --------------------------------------------------------------------------- #
@@ -767,23 +785,34 @@ def atomic_write(path_str: str, payload: str) -> None:
             os.remove(tmp)
 
 
-def compose_email(reset_msgs: list[str], fresh: list[dict]) -> tuple[str, str, str]:
-    if reset_msgs and fresh:
+def compose_email(reset_events: list[dict], fresh: list[dict]) -> tuple[str, str, str]:
+    if reset_events and fresh:
         subject = "Anthropic 额度已刷新 + 新额度公告"
-    elif reset_msgs:
+    elif reset_events:
         subject = "Anthropic 额度已刷新"
     else:
         subject = f"Anthropic 新额度公告 ({len(fresh)})"
 
+    poll_note = "（轮询检测，实际刷新后最多 ~15min 内通知）"
     lines = ["Anthropic Watch 检测到以下变化：", ""]
     html = ["<h2>Anthropic Watch</h2>"]
-    if reset_msgs:
+    if reset_events:
         lines.append("【额度刷新】")
         html.append("<h3>额度刷新</h3><ul>")
-        for m in reset_msgs:
-            lines.append(f"  - {m}")
-            html.append(f"<li>{m}</li>")
+        for e in reset_events:
+            lines.append(f"  - {e['label']}已刷新 ✅")
+            lines.append(f"    刷新时刻：北京时间 {e['refreshed_at']}")
+            lines.append("    额度已恢复，可继续使用")
+            parts = [f"{e['label']}已刷新 ✅",
+                     f"刷新时刻：北京时间 {e['refreshed_at']}",
+                     "额度已恢复，可继续使用"]
+            if e.get("next_reset"):
+                lines.append(f"    下次重置：北京时间 {e['next_reset']}")
+                parts.append(f"下次重置：北京时间 {e['next_reset']}")
+            html.append("<li>" + "<br>".join(parts) + "</li>")
         html.append("</ul>")
+        lines.append(poll_note)
+        html.append(f"<p><small>{poll_note}</small></p>")
         lines.append("")
     if fresh:
         lines.append("【新额度相关公告】")
@@ -826,7 +855,7 @@ def main() -> int:
     gateway_key = read_gateway_key()
 
     limits = build_limits_section(token, expiry)
-    reset_msgs = detect_resets(state, limits)
+    reset_events = detect_resets(state, limits)
 
     announcements, fresh = build_announcements_section(state, gateway_key)
 
@@ -842,8 +871,8 @@ def main() -> int:
     # already marked these events notified/seen in `state`; persisting that
     # before a failed send would permanently suppress the retry (codex C1).
     email_status = "skipped"
-    if reset_msgs or fresh:
-        subject, text_body, html_body = compose_email(reset_msgs, fresh)
+    if reset_events or fresh:
+        subject, text_body, html_body = compose_email(reset_events, fresh)
         email_status = send_email(subject, text_body, html_body)
 
     if email_status != "failed":
@@ -853,7 +882,7 @@ def main() -> int:
 
     log(f"snapshot written: limits.ok={limits.get('ok')} "
         f"announcements={len(announcements.get('items', []))} "
-        f"resets={len(reset_msgs)} fresh={len(fresh)} email={email_status}")
+        f"resets={len(reset_events)} fresh={len(fresh)} email={email_status}")
 
     return 0
 
