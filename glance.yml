@@ -326,6 +326,9 @@ pages:
               # preserve-order keeps Reddit's hot ranking: the .rss feed is
               # already hot-ordered and widget-rss.go re-sorts by date unless
               # preserve-order is set, which would drop the original sort: hot.
+              # The browser User-Agent matches the old reddit widget
+              # (widget-reddit.go:171); the rss default Glance/<ver> crawler UA
+              # can itself be 403'd by Reddit's UA-based filtering.
               - type: rss
                 title: r/anthropic
                 style: vertical-list
@@ -336,6 +339,8 @@ pages:
                 feeds:
                   - url: https://www.reddit.com/r/anthropic/.rss
                     title: r/anthropic
+                    headers:
+                      User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0
 
               - type: rss
                 title: r/ClaudeAI
@@ -347,6 +352,8 @@ pages:
                 feeds:
                   - url: https://www.reddit.com/r/ClaudeAI/.rss
                     title: r/ClaudeAI
+                    headers:
+                      User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0
 
           - type: split-column
             max-columns: 2
