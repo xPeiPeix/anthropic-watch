@@ -323,9 +323,13 @@ pages:
               # unauthenticated requests; the public .rss feed still serves 200
               # without app-auth credentials. Use rss to avoid a broken widget
               # and to keep a Reddit app secret out of this public repo.
+              # preserve-order keeps Reddit's hot ranking: the .rss feed is
+              # already hot-ordered and widget-rss.go re-sorts by date unless
+              # preserve-order is set, which would drop the original sort: hot.
               - type: rss
                 title: r/anthropic
                 style: vertical-list
+                preserve-order: true
                 limit: 12
                 collapse-after: 6
                 cache: 30m
@@ -336,6 +340,7 @@ pages:
               - type: rss
                 title: r/ClaudeAI
                 style: vertical-list
+                preserve-order: true
                 limit: 12
                 collapse-after: 6
                 cache: 30m
