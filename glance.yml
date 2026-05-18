@@ -319,21 +319,29 @@ pages:
                 limit: 15
                 collapse-after: 8
 
-              - type: reddit
+              # Reddit's JSON API (used by the `reddit` widget) returns 403 for
+              # unauthenticated requests; the public .rss feed still serves 200
+              # without app-auth credentials. Use rss to avoid a broken widget
+              # and to keep a Reddit app secret out of this public repo.
+              - type: rss
                 title: r/anthropic
-                subreddit: anthropic
                 style: vertical-list
                 limit: 12
                 collapse-after: 6
-                sort: hot
+                cache: 30m
+                feeds:
+                  - url: https://www.reddit.com/r/anthropic/.rss
+                    title: r/anthropic
 
-              - type: reddit
+              - type: rss
                 title: r/ClaudeAI
-                subreddit: ClaudeAI
                 style: vertical-list
                 limit: 12
                 collapse-after: 6
-                sort: hot
+                cache: 30m
+                feeds:
+                  - url: https://www.reddit.com/r/ClaudeAI/.rss
+                    title: r/ClaudeAI
 
           - type: split-column
             max-columns: 2
